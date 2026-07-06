@@ -19,6 +19,15 @@ const DB_PATH = path.join(__dirname, 'accounts_hub_data.json');
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'Accounts Hub API is running' });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Accounts Hub API is healthy' });
+});
+
+
 const allowedBankKeys = {
   FTA: ['ALLIANCE 1 (992)', 'ALLIANCE 2 (111)', 'CIMB 1 (860)', 'CIMB 2 (801)', 'PBB', 'SWIPEY 1', 'SWIPEY 2'],
   FTAB: ['PBB', 'FD'],

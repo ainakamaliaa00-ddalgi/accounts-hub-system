@@ -1,6 +1,8 @@
-# Accounts Hub Proper System - Easy Run Version
+# Accounts Hub Proper System - Fresh Restart Package
 
-This is a proper web-app package for Accounts Hub with:
+This is the clean restart package for Accounts Hub.
+
+It includes:
 - Frontend: React + Vite
 - Backend: Express API
 - Database: simple JSON file storage
@@ -15,8 +17,6 @@ This version does **not** use `better-sqlite3`, so it does not need Python or Wi
 - Admin: `admin` / `admin123`
 - BOD: `bod` / `bod123`
 - Shareholder: `shareholder` / `share123`
-
-Change these before using online.
 
 ## Run locally
 
@@ -34,41 +34,47 @@ npm install
 npm run dev
 ```
 
-Then open the frontend URL shown by Vite, usually:
-
+Open:
+```text
 http://localhost:5173
+```
 
-## Data storage
+## Deploy online
 
-The backend will create this file automatically:
+### 1. GitHub
+Upload these folders/files to GitHub:
+- `backend`
+- `frontend`
+- `docs`
+- `README.md`
 
-`backend/accounts_hub_data.json`
+### 2. Render backend
+Create a Web Service with:
+```text
+Root Directory: backend
+Build Command: npm install
+Start Command: npm start
+```
 
-That file stores users and imported finance records. Keep a backup of this file if you start entering real data.
+After deployment, test:
+```text
+https://YOUR-RENDER-LINK.onrender.com/api/health
+```
 
-## Role access
+It should show a JSON message that the API is healthy.
 
-Admin can access Claim, DB, OP, BS, Trial Balance, and General Ledger. Admin cannot access Profit & Loss or Balance Sheet.
+### 3. Vercel frontend
+Create/import the project with:
+```text
+Root Directory: frontend
+```
 
-BOD can access Trial Balance, General Ledger, Profit & Loss, and Balance Sheet. View-only.
+Add Environment Variable:
+```text
+Key: VITE_API_URL
+Value: https://YOUR-RENDER-LINK.onrender.com
+```
 
-Shareholder can access Profit & Loss and Balance Sheet only. View-only.
+The frontend code automatically adds `/api`, so do not worry if the value does not end with `/api`.
 
-## Importing data
-
-Login as Admin and use the Import CSV/Excel button in allowed modules.
-For BOD/Shareholder, import is hidden.
-
-For Profit & Loss and Balance Sheet imports, prepare clean CSV/Excel with the columns used in your report.
-
-## Updated importer notes
-
-This version has a more flexible Excel/CSV importer. It can:
-- find the header row even if the table starts lower in the Excel sheet,
-- recognise common header names such as Ref No, Reference No, Seller/Supplier, Details/Description, Amount/RM, Debit, Credit, Balance,
-- skip blank/template/error rows,
-- import all month sheets in one workbook,
-- filter BS imports by the selected bank where possible,
-- clear the current module before re-importing corrected data.
-
-If an earlier import created blank rows, click **Clear Current** in that module first, then import the Excel/CSV again.
+Then deploy.

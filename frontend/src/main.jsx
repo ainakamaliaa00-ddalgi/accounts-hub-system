@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { LogOut, Upload, Search, Building2, FileSpreadsheet, Shield } from 'lucide-react';
 import './style.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4000').replace(/\/$/, '');
+const API = API_BASE.endsWith('/api') ? API_BASE : `${API_BASE}/api`;
 const months = ['ALL','JAN 26','FEB 26','MAR 26','APR 26','MAY 26','JUN 26','JUL 26','AUG 26','SEP 26','OCT 26','NOV 26','DEC 26'];
 const moduleLabels = { Claim:'Claim', DB:'DB - Direct Bank In', OP:'OP - Online Purchase', BS:'BS / Bank Statements', TB:'Trial Balance', GL:'General Ledger', PL:'Profit & Loss', BALANCE_SHEET:'Balance Sheet' };
 const accountInitials = { FTA:'A', FTAB:'F', SN:'S' };
