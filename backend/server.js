@@ -24,7 +24,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Accounts Hub API is healthy' });
+  res.json({ status: 'ok', message: 'Accounts Hub API is healthy', importer: 'claim-for-ref-skip-instructions-v5' });
 });
 
 
@@ -463,8 +463,17 @@ app.post('/api/import/:account/:moduleKey', auth, upload.single('file'), (req, r
     let record = { id: nextId(tableName), account_code: account, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
 
     if (moduleKey === 'Claim') {
-      const claimFor = pick(r, ['for_field', 'For', 'For Field', 'Project', '__col1']);
-      const claimRef = pick(r, ['ref_no', 'Ref No', 'Ref. No', 'Reference No', 'Reference Number', 'Voucher No', 'PV No', 'JV No', '__col7']);
+      // Strong claim mapping for the user's Excel format:
+      // A=For, B=Date, C=Seller, D=Item, E=Category, F=Amount, G=Ref. No.
+      // Header names are still used first, but column letters are used as a final fallback.
+      let claimFor = pick(r, ['for_field', 'For', 'For Field', 'Project', 'Project Expenses', 'Department', 'Programme', 'Program']);
+      let claimRef = pick(r, ['ref_no', 'Ref No', 'Ref. No', 'Ref No.', 'Reference No', 'Reference Number', 'Voucher No', 'PV No', 'JV No']);
+      if (isBadText(claimFor)) claimFor = '';
+      if (isBadText(claimRef)) claimRef = '';
+      claimFor = claimFor || String(r.__col1 || '').trim();
+      claimRef = claimRef || String(r.__col7 || '').trim();
+      if (isBadText(claimFor)) claimFor = '';
+      if (isBadText(claimRef)) claimRef = '';
       record = { ...record, month, for_field: claimFor, date, ref_no: claimRef, seller: pick(r, ['seller', 'Seller', 'Supplier', 'Vendor', '__col3']), item: pick(r, ['item', 'Item', 'Items', 'Particulars', 'Details', 'Description', '__col4']), category: pick(r, ['category', 'Category', 'Kategori', '__col5']), amount: normalizeMoney(pick(r, ['amount', 'Amount', 'RM', 'Jumlah', 'Total', '__col6'])) };
     } else if (moduleKey === 'DB') {
       record = { ...record, month, date, ref_no: pick(r, ['ref_no', 'Ref No', 'Reference No', 'Reference Number', 'Voucher No', 'PV No', 'JV No']), received_from: pick(r, ['received_from', 'Received From', 'Payer', 'Customer', 'From']), description: pick(r, ['description', 'Description', 'Details', 'Particulars', 'Keterangan']), category: pick(r, ['category', 'Category', 'Kategori']), amount: normalizeMoney(pick(r, ['amount', 'Amount', 'RM', 'Jumlah', 'Total'])) };
