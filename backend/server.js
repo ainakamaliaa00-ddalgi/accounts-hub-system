@@ -24,7 +24,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Accounts Hub API is healthy', importer: 'claim-for-column-a-ref-column-g-v6' });
+  res.json({ status: 'ok', message: 'Accounts Hub API is healthy', importer: 'claim-direct-cell-a-g-v7' });
 });
 
 
@@ -337,6 +337,45 @@ function shouldIncludeSheet(sheetName, moduleKey, selectedBank, sheetCount) {
   return key ? bankHints[key].some(h => s.includes(h)) : false;
 }
 
+
+function cellText(sheet, rowNumber, colLetter) {
+  const cell = sheet[`${colLetter}${rowNumber}`];
+  if (!cell) return '';
+  if (cell.w !== undefined && cell.w !== null && String(cell.w).trim() !== '') return String(cell.w).trim();
+  if (cell.v !== undefined && cell.v !== null) return String(cell.v).trim();
+  return '';
+}
+
+function claimRowsDirectFromSheet(sheet, sheetName = '') {
+  const range = xlsx.utils.decode_range(sheet['!ref'] || 'A1:G1');
+  let headerRow = -1;
+  for (let r = range.s.r; r <= Math.min(range.e.r, range.s.r + 80); r += 1) {
+    const rowNo = r + 1;
+    const a = cellText(sheet, rowNo, 'A');
+    const b = cellText(sheet, rowNo, 'B');
+    const c = cellText(sheet, rowNo, 'C');
+    const d = cellText(sheet, rowNo, 'D');
+    const e = cellText(sheet, rowNo, 'E');
+    const f = cellText(sheet, rowNo, 'F');
+    const g = cellText(sheet, rowNo, 'G');
+    const score = [a,b,c,d,e,f,g].filter(Boolean).reduce((n, v) => n + (['for','date','seller','item','category','amount','ref no','ref. no'].some(alias => headerMatches(v, alias)) ? 1 : 0), 0);
+    if (score >= 4) { headerRow = rowNo; break; }
+  }
+  if (headerRow < 0) headerRow = range.s.r + 1;
+  const rows = [];
+  for (let rowNo = headerRow + 1; rowNo <= range.e.r + 1; rowNo += 1) {
+    const vals = ['A','B','C','D','E','F','G','H','I','J'].map(col => cellText(sheet, rowNo, col));
+    if (!vals.some(v => String(v || '').trim() !== '')) continue;
+    if (looksLikeInstructionRow(vals)) continue;
+    rows.push({
+      __sheetName: sheetName,
+      __col1: vals[0], __col2: vals[1], __col3: vals[2], __col4: vals[3], __col5: vals[4], __col6: vals[5], __col7: vals[6],
+      for_field: vals[0], date: vals[1], seller: vals[2], item: vals[3], category: vals[4], amount: vals[5], ref_no: vals[6]
+    });
+  }
+  return rows;
+}
+
 function getRowsFromUpload(file, moduleKey, selectedBank = '') {
   const name = file.originalname.toLowerCase();
   if (name.endsWith('.csv')) {
@@ -348,6 +387,10 @@ function getRowsFromUpload(file, moduleKey, selectedBank = '') {
   workbook.SheetNames.forEach(sheetName => {
     if (!shouldIncludeSheet(sheetName, moduleKey, selectedBank, workbook.SheetNames.length)) return;
     const sheet = workbook.Sheets[sheetName];
+    if (moduleKey === 'Claim') {
+      allRows.push(...claimRowsDirectFromSheet(sheet, sheetName));
+      return;
+    }
     const arrayRows = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false, blankrows: false });
     allRows.push(...objectRowsFromArrayRows(arrayRows, moduleKey, sheetName));
   });
