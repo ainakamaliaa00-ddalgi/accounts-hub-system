@@ -254,6 +254,30 @@ function mapHeaders(cells, moduleKey) {
   return map;
 }
 
+function looksLikeInstructionRow(row) {
+  const instructionPatterns = [
+    /insert\s+the/i,
+    /key\s+in/i,
+    /auto\s+generated/i,
+    /try\s+to\s+fill/i,
+    /unusual\s+or\s+things/i,
+    /take\s+note/i,
+    /how\s+much/i,
+    /company\s+name\s+on\s+the\s+receipt/i,
+    /project\s+expenses/i,
+    /receipt\s+date/i,
+    /hard\s+copy/i,
+    /ecopy\s+check/i
+  ];
+  let score = 0;
+  for (const value of row) {
+    const text = String(value ?? '').trim();
+    if (!text) continue;
+    if (instructionPatterns.some(pattern => pattern.test(text))) score += 1;
+  }
+  return score >= 2;
+}
+
 function objectRowsFromArrayRows(arrayRows, moduleKey, sheetName = '') {
   const nonEmptyRows = arrayRows.filter(row => row.some(value => String(value ?? '').trim() !== ''));
   if (!nonEmptyRows.length) return [];
@@ -275,7 +299,9 @@ function objectRowsFromArrayRows(arrayRows, moduleKey, sheetName = '') {
 
   const headerMap = mapHeaders(nonEmptyRows[bestHeaderIndex], moduleKey);
   const headerNames = nonEmptyRows[bestHeaderIndex].map((cell, idx) => String(cell || `Column ${idx + 1}`).trim() || `Column ${idx + 1}`);
-  const dataRows = nonEmptyRows.slice(bestHeaderIndex + 1);
+  const dataRows = nonEmptyRows
+    .slice(bestHeaderIndex + 1)
+    .filter(row => !looksLikeInstructionRow(row));
 
   return dataRows.map(row => {
     const obj = { __sheetName: sheetName };
@@ -356,7 +382,8 @@ function dateValue(value) {
 
 function isBadText(value) {
   const s = String(value ?? '').trim();
-  return !s || s === '#N/A' || s === '#VALUE!' || s === '-' || s.toUpperCase() === 'MYR';
+  if (!s || s === '#N/A' || s === '#VALUE!' || s === '-' || s.toUpperCase() === 'MYR') return true;
+  return /^(insert the|key in|try to fill|auto generated|how much|unusual or things|take note)/i.test(s);
 }
 
 function hasMeaningfulRecord(moduleKey, record) {
