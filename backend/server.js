@@ -269,13 +269,14 @@ function looksLikeInstructionRow(row) {
     /hard\s+copy/i,
     /ecopy\s+check/i
   ];
-  let score = 0;
+  // Skip instruction/helper rows under Excel headers.
+  // Even one strong helper phrase is enough, because real finance rows should not start with these.
   for (const value of row) {
     const text = String(value ?? '').trim();
     if (!text) continue;
-    if (instructionPatterns.some(pattern => pattern.test(text))) score += 1;
+    if (instructionPatterns.some(pattern => pattern.test(text))) return true;
   }
-  return score >= 2;
+  return false;
 }
 
 function objectRowsFromArrayRows(arrayRows, moduleKey, sheetName = '') {
@@ -308,6 +309,9 @@ function objectRowsFromArrayRows(arrayRows, moduleKey, sheetName = '') {
     for (const [field, idx] of Object.entries(headerMap)) obj[field] = row[idx] ?? '';
     // Keep original headers as fallback for clean CSV/object-style lookup.
     headerNames.forEach((header, idx) => { obj[header] = row[idx] ?? ''; });
+    // Generic column fallbacks help when an Excel file has helper rows/merged cells
+    // or slightly unusual headers, while still prioritising detected header names.
+    row.forEach((value, idx) => { obj[`__col${idx + 1}`] = value ?? ''; });
     return obj;
   });
 }
@@ -459,7 +463,9 @@ app.post('/api/import/:account/:moduleKey', auth, upload.single('file'), (req, r
     let record = { id: nextId(tableName), account_code: account, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
 
     if (moduleKey === 'Claim') {
-      record = { ...record, month, for_field: pick(r, ['for_field', 'For', 'For Field', 'Project']), date, ref_no: pick(r, ['ref_no', 'Ref No', 'Reference No', 'Reference Number', 'Voucher No', 'PV No', 'JV No']), seller: pick(r, ['seller', 'Seller', 'Supplier', 'Vendor']), item: pick(r, ['item', 'Item', 'Items', 'Particulars', 'Details', 'Description']), category: pick(r, ['category', 'Category', 'Kategori']), amount: normalizeMoney(pick(r, ['amount', 'Amount', 'RM', 'Jumlah', 'Total'])) };
+      const claimFor = pick(r, ['for_field', 'For', 'For Field', 'Project', '__col1']);
+      const claimRef = pick(r, ['ref_no', 'Ref No', 'Ref. No', 'Reference No', 'Reference Number', 'Voucher No', 'PV No', 'JV No', '__col7']);
+      record = { ...record, month, for_field: claimFor, date, ref_no: claimRef, seller: pick(r, ['seller', 'Seller', 'Supplier', 'Vendor', '__col3']), item: pick(r, ['item', 'Item', 'Items', 'Particulars', 'Details', 'Description', '__col4']), category: pick(r, ['category', 'Category', 'Kategori', '__col5']), amount: normalizeMoney(pick(r, ['amount', 'Amount', 'RM', 'Jumlah', 'Total', '__col6'])) };
     } else if (moduleKey === 'DB') {
       record = { ...record, month, date, ref_no: pick(r, ['ref_no', 'Ref No', 'Reference No', 'Reference Number', 'Voucher No', 'PV No', 'JV No']), received_from: pick(r, ['received_from', 'Received From', 'Payer', 'Customer', 'From']), description: pick(r, ['description', 'Description', 'Details', 'Particulars', 'Keterangan']), category: pick(r, ['category', 'Category', 'Kategori']), amount: normalizeMoney(pick(r, ['amount', 'Amount', 'RM', 'Jumlah', 'Total'])) };
     } else if (moduleKey === 'OP') {
