@@ -156,22 +156,55 @@ function monthFromDate(date) {
 
 function cleanHeader(value) {
   return String(value || '')
-    .replace(/\s+/g, ' ')
     .replace(/[\n\r]+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
 }
 
+function headerKey(value) {
+  return cleanHeader(value).replace(/[^a-z0-9]/g, '');
+}
+
+function headerWords(value) {
+  return cleanHeader(value)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+}
+
+function headerMatches(cell, alias) {
+  const c = cleanHeader(cell);
+  const a = cleanHeader(alias);
+  const ck = headerKey(cell);
+  const ak = headerKey(alias);
+  if (!c || !a || !ck || !ak) return false;
+
+  // Exact / punctuation-insensitive match: "Ref. No." = "ref no"
+  if (c === a || ck === ak) return true;
+
+  // Flexible contains match: "Reference Number (optional)" contains "reference number"
+  if (c.includes(a) || a.includes(c) || ck.includes(ak) || ak.includes(ck)) return true;
+
+  // Word-based match so column order does not matter and headers can be long.
+  const cellWords = new Set(headerWords(cell));
+  const aliasWords = headerWords(alias);
+  if (aliasWords.length && aliasWords.every(word => cellWords.has(word))) return true;
+
+  return false;
+}
+
 const headerAliases = {
   month: ['month', 'bulan'],
-  for_field: ['for', 'for field', 'project', 'projek', 'purpose', 'claim for'],
+  for_field: ['for', 'for field', 'project', 'projek', 'purpose', 'claim for', 'for/project', 'for project', 'charged to', 'claim under', 'claim purpose', 'department', 'programme', 'program'],
   date: ['date', 'tarikh', 'transaction date'],
-  ref_no: ['ref no', 'ref. no', 'reference no', 'reference number', 'reference', 'no rujukan', 'voucher no', 'jv no', 'pv no', 'doc no', 'document no'],
-  seller: ['seller', 'supplier', 'vendor', 'payee', 'nama pembekal'],
+  ref_no: ['ref no', 'ref. no', 'ref. number', 'reference no', 'reference number', 'reference', 'reference id', 'transaction ref', 'transaction reference', 'no rujukan', 'rujukan', 'voucher no', 'voucher number', 'claim no', 'receipt no', 'jv no', 'pv no', 'doc no', 'document no', 'document number'],
+  seller: ['seller', 'seller name', 'supplier', 'supplier name', 'vendor', 'payee', 'merchant', 'company', 'nama pembekal'],
   item: ['item', 'items', 'description item', 'particulars', 'details', 'keterangan'],
   category: ['category', 'kategori', 'type'],
-  amount: ['amount', 'total amount', 'rm', 'jumlah', 'debit/(credit)', 'debit credit'],
-  received_from: ['received from', 'payer', 'customer', 'from', 'nama pembayar'],
+  amount: ['amount', 'total amount', 'rm', 'rm amount', 'jumlah', 'total', 'nett', 'net amount', 'debit/(credit)', 'debit credit'],
+  received_from: ['received from', 'received by', 'payer', 'customer', 'from', 'name', 'nama pembayar'],
   description: ['description', 'details', 'particulars', 'transaction description', 'keterangan'],
   debit: ['debit', 'dr'],
   credit: ['credit', 'cr'],
@@ -198,11 +231,10 @@ const moduleFields = {
 
 function headerScore(cells, moduleKey) {
   const wanted = moduleFields[moduleKey] || [];
-  const cleaned = cells.map(cleanHeader);
   let score = 0;
   for (const field of wanted) {
     const aliases = headerAliases[field] || [field];
-    if (cleaned.some(cell => aliases.some(alias => cell === alias || cell.includes(alias)))) score += 1;
+    if (cells.some(cell => aliases.some(alias => headerMatches(cell, alias)))) score += 1;
   }
   return score;
 }
@@ -211,11 +243,10 @@ function mapHeaders(cells, moduleKey) {
   const map = {};
   const wanted = moduleFields[moduleKey] || [];
   cells.forEach((cell, idx) => {
-    const cleaned = cleanHeader(cell);
     for (const field of wanted) {
       if (map[field] !== undefined) continue;
       const aliases = headerAliases[field] || [field];
-      if (aliases.some(alias => cleaned === alias || cleaned.includes(alias))) {
+      if (aliases.some(alias => headerMatches(cell, alias))) {
         map[field] = idx;
       }
     }
@@ -297,13 +328,12 @@ function pick(row, names) {
   const keys = Object.keys(row);
   for (const name of names) {
     if (row[name] !== undefined && row[name] !== null && String(row[name]).trim() !== '') return row[name];
-    const target = cleanHeader(name);
-    const key = keys.find(k => cleanHeader(k) === target);
+    const key = keys.find(k => headerMatches(k, name));
     if (key && String(row[key]).trim() !== '') return row[key];
   }
   for (const name of names) {
-    const target = cleanHeader(name);
-    const key = keys.find(k => cleanHeader(k).includes(target) || target.includes(cleanHeader(k)));
+    const aliases = [name, ...(headerAliases[name] || [])];
+    const key = keys.find(k => aliases.some(alias => headerMatches(k, alias)));
     if (key && String(row[key]).trim() !== '') return row[key];
   }
   return '';
