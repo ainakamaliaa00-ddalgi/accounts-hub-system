@@ -24,7 +24,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Accounts Hub API is healthy', importer: 'claim-for-ref-skip-instructions-v5' });
+  res.json({ status: 'ok', message: 'Accounts Hub API is healthy', importer: 'claim-for-column-a-ref-column-g-v6' });
 });
 
 
@@ -463,18 +463,36 @@ app.post('/api/import/:account/:moduleKey', auth, upload.single('file'), (req, r
     let record = { id: nextId(tableName), account_code: account, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
 
     if (moduleKey === 'Claim') {
-      // Strong claim mapping for the user's Excel format:
+      // Claim sheets from the user's Google Sheet use fixed visible columns:
       // A=For, B=Date, C=Seller, D=Item, E=Category, F=Amount, G=Ref. No.
-      // Header names are still used first, but column letters are used as a final fallback.
-      let claimFor = pick(r, ['for_field', 'For', 'For Field', 'Project', 'Project Expenses', 'Department', 'Programme', 'Program']);
-      let claimRef = pick(r, ['ref_no', 'Ref No', 'Ref. No', 'Ref No.', 'Reference No', 'Reference Number', 'Voucher No', 'PV No', 'JV No']);
+      // Use these columns directly first so the importer does not depend on header order, helper rows, or dropdown/data validation.
+      const colFor = String(r.__col1 ?? '').trim();
+      const colDate = dateValue(r.__col2 ?? '');
+      const colSeller = String(r.__col3 ?? '').trim();
+      const colItem = String(r.__col4 ?? '').trim();
+      const colCategory = String(r.__col5 ?? '').trim();
+      const colAmount = r.__col6 ?? '';
+      const colRef = String(r.__col7 ?? '').trim();
+
+      let claimFor = colFor || pick(r, ['for_field', 'For', 'For Field', 'Project', 'Department', 'Programme', 'Program']);
+      let claimRef = colRef || pick(r, ['ref_no', 'Ref No', 'Ref. No', 'Ref No.', 'Reference No', 'Reference Number', 'Voucher No', 'PV No', 'JV No']);
+      let claimDate = colDate || date;
+
       if (isBadText(claimFor)) claimFor = '';
       if (isBadText(claimRef)) claimRef = '';
-      claimFor = claimFor || String(r.__col1 || '').trim();
-      claimRef = claimRef || String(r.__col7 || '').trim();
-      if (isBadText(claimFor)) claimFor = '';
-      if (isBadText(claimRef)) claimRef = '';
-      record = { ...record, month, for_field: claimFor, date, ref_no: claimRef, seller: pick(r, ['seller', 'Seller', 'Supplier', 'Vendor', '__col3']), item: pick(r, ['item', 'Item', 'Items', 'Particulars', 'Details', 'Description', '__col4']), category: pick(r, ['category', 'Category', 'Kategori', '__col5']), amount: normalizeMoney(pick(r, ['amount', 'Amount', 'RM', 'Jumlah', 'Total', '__col6'])) };
+      if (isBadText(claimDate)) claimDate = '';
+
+      record = {
+        ...record,
+        month: monthFromDate(claimDate) || month,
+        for_field: claimFor,
+        date: claimDate,
+        ref_no: claimRef,
+        seller: colSeller || pick(r, ['seller', 'Seller', 'Supplier', 'Vendor']),
+        item: colItem || pick(r, ['item', 'Item', 'Items', 'Particulars', 'Details', 'Description']),
+        category: colCategory || pick(r, ['category', 'Category', 'Kategori']),
+        amount: normalizeMoney(colAmount || pick(r, ['amount', 'Amount', 'RM', 'Jumlah', 'Total']))
+      };
     } else if (moduleKey === 'DB') {
       record = { ...record, month, date, ref_no: pick(r, ['ref_no', 'Ref No', 'Reference No', 'Reference Number', 'Voucher No', 'PV No', 'JV No']), received_from: pick(r, ['received_from', 'Received From', 'Payer', 'Customer', 'From']), description: pick(r, ['description', 'Description', 'Details', 'Particulars', 'Keterangan']), category: pick(r, ['category', 'Category', 'Kategori']), amount: normalizeMoney(pick(r, ['amount', 'Amount', 'RM', 'Jumlah', 'Total'])) };
     } else if (moduleKey === 'OP') {
