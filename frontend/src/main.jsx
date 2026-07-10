@@ -66,7 +66,15 @@ function Report({moduleKey,rows}){
   if(moduleKey==='GL') return <Table rows={rows} cols={['date','ref_no','account','description','debit','credit','balance']} moneyCols={['debit','credit','balance']} />;
   if(moduleKey==='BS') return <Table rows={rows} cols={['month','date','description','debit','credit','category','balance']} moneyCols={['debit','credit','balance']} />;
   if(moduleKey==='Claim') return <Table rows={rows} cols={['for_field','date','ref_no','seller','item','category','amount']} moneyCols={['amount']} />;
-  if(moduleKey==='DB') return <Table rows={rows} cols={['date','ref_no','received_from','description','category','amount']} moneyCols={['amount']} />;
+  if(moduleKey==='DB') {
+    const mappedRows = rows.map(r => ({
+      ...r,
+      for_field: r.for_field || '',
+      seller: r.seller || r.received_from || '',
+      item: r.item || r.description || ''
+    }));
+    return <Table rows={mappedRows} cols={['for_field','date','ref_no','seller','item','category','amount']} moneyCols={['amount']} />;
+  }
   return <Table rows={rows} cols={Object.keys(rows[0]||{})} />;
 }
 function Table({rows,cols,moneyCols=[]}){ return <div className="card"><table><thead><tr>{cols.map(c=><th key={c}>{c.replaceAll('_',' ').toUpperCase()}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={i}>{cols.map(c=><td key={c} className={moneyCols.includes(c)?'num':''}>{moneyCols.includes(c)?money(r[c]):r[c]}</td>)}</tr>)}</tbody></table></div> }
