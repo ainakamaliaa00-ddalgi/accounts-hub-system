@@ -24,7 +24,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Accounts Hub API is healthy', importer: 'claim-direct-cell-a-g-v7' });
+  res.json({ status: 'ok', message: 'Accounts Hub API is healthy', importer: 'claim-csv-and-excel-direct-a-g-v8' });
 });
 
 
@@ -376,9 +376,38 @@ function claimRowsDirectFromSheet(sheet, sheetName = '') {
   return rows;
 }
 
+
+function claimRowsDirectFromArrayRows(arrayRows, sheetName = 'CSV') {
+  let headerIndex = -1;
+  const maxScan = Math.min(arrayRows.length, 80);
+  for (let i = 0; i < maxScan; i += 1) {
+    const row = arrayRows[i] || [];
+    const vals = row.slice(0, 7).map(v => String(v ?? '').trim());
+    const score = vals.filter(Boolean).reduce((n, v) => n + (['for','date','seller','item','category','amount','ref no','ref. no','reference'].some(alias => headerMatches(v, alias)) ? 1 : 0), 0);
+    if (score >= 3) { headerIndex = i; break; }
+  }
+  if (headerIndex < 0) headerIndex = 0;
+  const rows = [];
+  for (let i = headerIndex + 1; i < arrayRows.length; i += 1) {
+    const vals = (arrayRows[i] || []).slice(0, 10).map(v => String(v ?? '').trim());
+    if (!vals.some(v => v !== '')) continue;
+    if (looksLikeInstructionRow(vals)) continue;
+    rows.push({
+      __sheetName: sheetName,
+      __col1: vals[0], __col2: vals[1], __col3: vals[2], __col4: vals[3], __col5: vals[4], __col6: vals[5], __col7: vals[6],
+      for_field: vals[0], date: vals[1], seller: vals[2], item: vals[3], category: vals[4], amount: vals[5], ref_no: vals[6]
+    });
+  }
+  return rows;
+}
+
 function getRowsFromUpload(file, moduleKey, selectedBank = '') {
   const name = file.originalname.toLowerCase();
   if (name.endsWith('.csv')) {
+    if (moduleKey === 'Claim') {
+      const arrayRows = parse(file.buffer.toString('utf8'), { columns: false, skip_empty_lines: false, trim: true, bom: true });
+      return claimRowsDirectFromArrayRows(arrayRows, 'CSV');
+    }
     const parsed = parse(file.buffer.toString('utf8'), { columns: true, skip_empty_lines: true, trim: true, bom: true });
     return parsed.map(row => ({ ...row, __sheetName: 'CSV' }));
   }
