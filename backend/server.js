@@ -24,7 +24,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Accounts Hub API is healthy', importer: 'claim-csv-and-excel-direct-a-g-v8' });
+  res.json({ status: 'ok', message: 'Accounts Hub API is healthy', importer: 'month-filter-date-parser-v9' });
 });
 
 
@@ -148,10 +148,47 @@ function normalizeMoney(value) {
 }
 
 function monthFromDate(date) {
-  const m = String(date || '').match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-  if (!m) return '';
+  const raw = String(date || '').trim();
+  if (!raw) return '';
   const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  return `${monthNames[Number(m[2]) - 1] || ''} ${String(m[3]).slice(-2)}`.trim();
+  const textMonths = {
+    jan: 1, january: 1,
+    feb: 2, february: 2,
+    mar: 3, march: 3,
+    apr: 4, april: 4,
+    may: 5,
+    jun: 6, june: 6,
+    jul: 7, july: 7,
+    aug: 8, august: 8,
+    sep: 9, sept: 9, september: 9,
+    oct: 10, october: 10,
+    nov: 11, november: 11,
+    dec: 12, december: 12
+  };
+
+  // DD/MM/YYYY or DD-MM-YYYY, Malaysia/UK style.
+  let m = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (m) return `${monthNames[Number(m[2]) - 1] || ''} ${String(m[3]).slice(-2)}`.trim();
+
+  // YYYY-MM-DD or YYYY/MM/DD.
+  m = raw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (m) return `${monthNames[Number(m[2]) - 1] || ''} ${String(m[1]).slice(-2)}`.trim();
+
+  // 02 Mar 2026, 2 March 2026, 02-Mar-2026.
+  m = raw.match(/^(\d{1,2})[\s\-]+([A-Za-z]+)[\s\-]+(\d{2,4})$/);
+  if (m) {
+    const monthNo = textMonths[m[2].toLowerCase()];
+    if (monthNo) return `${monthNames[monthNo - 1]} ${String(m[3]).slice(-2)}`;
+  }
+
+  // Mar 02 2026, March 2, 2026.
+  m = raw.match(/^([A-Za-z]+)[\s\-]+(\d{1,2}),?[\s\-]+(\d{2,4})$/);
+  if (m) {
+    const monthNo = textMonths[m[1].toLowerCase()];
+    if (monthNo) return `${monthNames[monthNo - 1]} ${String(m[3]).slice(-2)}`;
+  }
+
+  return '';
 }
 
 function cleanHeader(value) {
@@ -511,7 +548,7 @@ app.get('/api/records/:account/:moduleKey', auth, (req, res) => {
   let rows = (db[tableName] || []).filter(row => row.account_code === account);
   if (moduleKey === 'BS' && req.query.bank) rows = rows.filter(row => row.bank_key === req.query.bank);
   if (['Claim', 'DB', 'OP', 'BS'].includes(moduleKey) && req.query.month && req.query.month !== 'ALL') {
-    rows = rows.filter(row => row.month === req.query.month);
+    rows = rows.filter(row => (row.month || monthFromDate(row.date)) === req.query.month);
   }
   res.json({ rows: sortRows(moduleKey, rows) });
 });
