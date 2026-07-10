@@ -24,7 +24,7 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Accounts Hub API is healthy', importer: 'month-filter-date-parser-v9' });
+  res.json({ status: 'ok', message: 'Accounts Hub API is healthy', importer: 'admin-only-delete-v12' });
 });
 
 
@@ -138,6 +138,10 @@ function can(req, moduleKey, action = 'view') {
   const rolePerms = permissions[req.user.role] || {};
   const perm = rolePerms[moduleKey];
   return perm && perm[`can_${action}`] === 1;
+}
+
+function isAdmin(req) {
+  return req.user && req.user.role === 'ADMIN';
 }
 
 function normalizeMoney(value) {
@@ -630,11 +634,29 @@ app.post('/api/import/:account/:moduleKey', auth, upload.single('file'), (req, r
   res.json({ imported: imported.length, skipped, scanned: rows.length });
 });
 
+app.delete('/api/record/:moduleKey/:id', auth, (req, res) => {
+  const { moduleKey, id } = req.params;
+  const tableName = tableMap[moduleKey];
+  if (!tableName) return res.status(404).json({ error: 'Unknown module' });
+  if (!isAdmin(req) || !can(req, moduleKey, 'delete')) {
+    return res.status(403).json({ error: 'Only Admin can delete records' });
+  }
+
+  const before = db[tableName].length;
+  db[tableName] = db[tableName].filter(row => String(row.id) !== String(id));
+  const deleted = before - db[tableName].length;
+  if (deleted === 0) return res.status(404).json({ error: 'Record not found' });
+  saveDb();
+  res.json({ deleted });
+});
+
 app.delete('/api/records/:account/:moduleKey', auth, (req, res) => {
   const { account, moduleKey } = req.params;
   const tableName = tableMap[moduleKey];
   if (!tableName) return res.status(404).json({ error: 'Unknown module' });
-  if (!can(req, moduleKey, 'delete')) return res.status(403).json({ error: 'Access denied' });
+  if (!isAdmin(req) || !can(req, moduleKey, 'delete')) {
+    return res.status(403).json({ error: 'Only Admin can delete records or clear module data' });
+  }
 
   const before = db[tableName].length;
   db[tableName] = db[tableName].filter(row => {

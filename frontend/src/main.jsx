@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LogOut, Upload, Search, Building2, FileSpreadsheet, Shield } from 'lucide-react';
+import { LogOut, Upload, Search, Building2, FileSpreadsheet, Shield, Trash2 } from 'lucide-react';
 import './style.css';
 
 const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4000').replace(/\/$/, '');
@@ -46,11 +46,20 @@ function App(){
     alert(res.ok?`Deleted ${data.deleted} rows`:data.error);
     loadRows();
   }
+  async function deleteRow(row){
+    if(session.user.role!=='ADMIN') return alert('Only Admin can delete records.');
+    if(!row?.id) return alert('This row cannot be deleted because it has no record ID.');
+    if(!confirm('Delete this record? This cannot be undone.')) return;
+    const res=await fetch(`${API}/record/${moduleKey}/${row.id}`,{method:'DELETE',headers:authHeaders(session.token)});
+    const data=await res.json();
+    if(!res.ok) return alert(data.error||'Delete failed');
+    loadRows();
+  }
   const filtered=useMemo(()=> rows.filter(r=>Object.values(r).join(' ').toLowerCase().includes(q.toLowerCase())),[rows,q]);
   const activePerm=allowedModules.find(m=>m.key===moduleKey)||{};
   if(!session) return <Login setSession={setSession}/>;
   if(!nav) return <div className="loading">Loading...</div>;
-  return <div className="shell"><aside><div className="brand"><Shield/><div><h2>Accounts Hub</h2><span>{session.user.displayName} · {session.user.role}</span></div></div><p className="side-label">Account</p>{nav.accounts.map(a=><button key={a} className={a===account?'active account':'account'} onClick={()=>{setAccount(a);setBank('')}}><span className="avatar">{accountInitials[a]}</span>{a}</button>)}<p className="side-label">Category</p>{allowedModules.map(m=><button key={m.key} className={m.key===moduleKey?'active module':'module'} onClick={()=>{setModuleKey(m.key);setBank('')}}><FileSpreadsheet size={16}/>{m.label}</button>)}{moduleKey==='BS'&&<div className="banks">{(nav.banks[account]||[]).map(b=><button className={bank===b?'active bank':'bank'} onClick={()=>setBank(b)} key={b}>{b}</button>)}</div>}<button className="logout" onClick={logout}><LogOut size={16}/> Logout</button></aside><main><header><div><small>Current View</small><h1>{account} / {moduleLabels[moduleKey]} {bank?`/ ${bank}`:''}</h1></div><div className="user-pill">{session.user.displayName}</div></header><Kpis moduleKey={moduleKey} rows={filtered} account={account}/><section className="toolbar">{['Claim','DB','OP','BS'].includes(moduleKey)&&<select value={month} onChange={e=>setMonth(e.target.value)}>{months.map(m=><option key={m}>{m}</option>)}</select>}<div className="search"><Search size={16}/><input placeholder="Search records..." value={q} onChange={e=>setQ(e.target.value)}/></div>{activePerm.can_delete===1&&<button className="clear-btn" onClick={clearCurrentModule}>Clear Current</button>}{activePerm.can_add===1&&<label className="import"><Upload size={16}/> Import CSV/Excel<input type="file" accept=".csv,.xlsx,.xls" onChange={importFile}/></label>}</section><Report moduleKey={moduleKey} rows={filtered}/></main></div>
+  return <div className="shell"><aside><div className="brand"><Shield/><div><h2>Accounts Hub</h2><span>{session.user.displayName} · {session.user.role}</span></div></div><p className="side-label">Account</p>{nav.accounts.map(a=><button key={a} className={a===account?'active account':'account'} onClick={()=>{setAccount(a);setBank('')}}><span className="avatar">{accountInitials[a]}</span>{a}</button>)}<p className="side-label">Category</p>{allowedModules.map(m=><button key={m.key} className={m.key===moduleKey?'active module':'module'} onClick={()=>{setModuleKey(m.key);setBank('')}}><FileSpreadsheet size={16}/>{m.label}</button>)}{moduleKey==='BS'&&<div className="banks">{(nav.banks[account]||[]).map(b=><button className={bank===b?'active bank':'bank'} onClick={()=>setBank(b)} key={b}>{b}</button>)}</div>}<button className="logout" onClick={logout}><LogOut size={16}/> Logout</button></aside><main><header><div><small>Current View</small><h1>{account} / {moduleLabels[moduleKey]} {bank?`/ ${bank}`:''}</h1></div><div className="user-pill">{session.user.displayName}</div></header><Kpis moduleKey={moduleKey} rows={filtered} account={account}/><section className="toolbar">{['Claim','DB','OP','BS'].includes(moduleKey)&&<select value={month} onChange={e=>setMonth(e.target.value)}>{months.map(m=><option key={m}>{m}</option>)}</select>}<div className="search"><Search size={16}/><input placeholder="Search records..." value={q} onChange={e=>setQ(e.target.value)}/></div>{session.user.role==='ADMIN'&&activePerm.can_delete===1&&<button className="clear-btn" onClick={clearCurrentModule}>Clear Current</button>}{activePerm.can_add===1&&<label className="import"><Upload size={16}/> Import CSV/Excel<input type="file" accept=".csv,.xlsx,.xls" onChange={importFile}/></label>}</section><Report moduleKey={moduleKey} rows={filtered} canDelete={session.user.role==='ADMIN'&&activePerm.can_delete===1} onDelete={deleteRow}/></main></div>
 }
 function Kpis({moduleKey,rows,account}){
   if(moduleKey==='BALANCE_SHEET') return null;
@@ -59,13 +68,13 @@ function Kpis({moduleKey,rows,account}){
   const netPL = moduleKey==='PL' ? (rows.find(r=>String(r.account||'').toUpperCase().includes('NET PROFIT'))?.amount || totalAmount) : totalAmount;
   return <div className="kpis"><div className="kpi"><span>#</span><b>{rows.length}</b><small>Total Rows</small></div>{moduleKey==='PL'?<div className="kpi"><span>RM</span><b>{money(netPL)}</b><small>Net Profit/(Loss)</small></div>:<div className="kpi"><span>RM</span><b>{money(moduleKey==='TB'||moduleKey==='GL'?debit:totalAmount)}</b><small>{moduleKey==='TB'||moduleKey==='GL'?'Total Debit':'Total Amount'}</small></div>}{(moduleKey==='TB'||moduleKey==='GL')&&<div className="kpi"><span>RM</span><b>{money(credit)}</b><small>Total Credit</small></div>}<div className="kpi"><span><Building2 size={14}/></span><b>{account}</b><small>Account</small></div></div>
 }
-function Report({moduleKey,rows}){
+function Report({moduleKey,rows,canDelete=false,onDelete}){
   if(moduleKey==='PL') return <Statement title="Profit & Loss Account" rows={rows} />;
   if(moduleKey==='BALANCE_SHEET') return <Statement title="Balance Sheet" rows={rows} balance />;
-  if(moduleKey==='TB') return <Table rows={rows} cols={['code','account','debit','credit']} moneyCols={['debit','credit']} />;
-  if(moduleKey==='GL') return <Table rows={rows} cols={['date','ref_no','account','description','debit','credit','balance']} moneyCols={['debit','credit','balance']} />;
-  if(moduleKey==='BS') return <Table rows={rows} cols={['month','date','description','debit','credit','category','balance']} moneyCols={['debit','credit','balance']} />;
-  if(moduleKey==='Claim') return <Table rows={rows} cols={['for_field','date','ref_no','seller','item','category','amount']} moneyCols={['amount']} />;
+  if(moduleKey==='TB') return <Table rows={rows} cols={['code','account','debit','credit']} moneyCols={['debit','credit']} canDelete={canDelete} onDelete={onDelete} />;
+  if(moduleKey==='GL') return <Table rows={rows} cols={['date','ref_no','account','description','debit','credit','balance']} moneyCols={['debit','credit','balance']} canDelete={canDelete} onDelete={onDelete} />;
+  if(moduleKey==='BS') return <Table rows={rows} cols={['month','date','description','debit','credit','category','balance']} moneyCols={['debit','credit','balance']} canDelete={canDelete} onDelete={onDelete} />;
+  if(moduleKey==='Claim') return <Table rows={rows} cols={['for_field','date','ref_no','seller','item','category','amount']} moneyCols={['amount']} canDelete={canDelete} onDelete={onDelete} />;
   if(moduleKey==='DB') {
     const mappedRows = rows.map(r => ({
       ...r,
@@ -73,11 +82,11 @@ function Report({moduleKey,rows}){
       seller: r.seller || r.received_from || '',
       item: r.item || r.description || ''
     }));
-    return <Table rows={mappedRows} cols={['for_field','date','ref_no','seller','item','category','amount']} moneyCols={['amount']} />;
+    return <Table rows={mappedRows} cols={['for_field','date','ref_no','seller','item','category','amount']} moneyCols={['amount']} canDelete={canDelete} onDelete={onDelete} />;
   }
-  return <Table rows={rows} cols={Object.keys(rows[0]||{})} />;
+  return <Table rows={rows} cols={Object.keys(rows[0]||{})} canDelete={canDelete} onDelete={onDelete} />;
 }
-function Table({rows,cols,moneyCols=[]}){ return <div className="card"><table><thead><tr>{cols.map(c=><th key={c}>{c.replaceAll('_',' ').toUpperCase()}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={i}>{cols.map(c=><td key={c} className={moneyCols.includes(c)?'num':''}>{moneyCols.includes(c)?money(r[c]):r[c]}</td>)}</tr>)}</tbody></table></div> }
+function Table({rows,cols,moneyCols=[],canDelete=false,onDelete}){ return <div className="card"><table><thead><tr>{cols.map(c=><th key={c}>{c.replaceAll('_',' ').toUpperCase()}</th>)}{canDelete&&<th>ACTION</th>}</tr></thead><tbody>{rows.map((r,i)=><tr key={r.id||i}>{cols.map(c=><td key={c} className={moneyCols.includes(c)?'num':''}>{moneyCols.includes(c)?money(r[c]):r[c]}</td>)}{canDelete&&<td><button className="row-delete-btn" onClick={()=>onDelete?.(r)} title="Delete this record"><Trash2 size={14}/> Delete</button></td>}</tr>)}</tbody></table></div> }
 function Statement({title,rows,balance}){ return <div className="statement card"><h2>{title}</h2><h3>RM</h3>{rows.map((r,i)=><div key={i} className={(r.account||'').toLowerCase().includes('total')?'line total':'line'}><span className={r.section&&!r.account?'section':''}>{r.subsection||r.account||r.section}</span><b>{money(r.amount)}</b></div>)}</div> }
 
 createRoot(document.getElementById('root')).render(<App/>);
